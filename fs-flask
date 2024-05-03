@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+# this script runs the flask development server unconditionally for the
+# FileStorage environment
+echo "Deleting the existing file.json"
+rm file.json 2> /dev/null
+
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <number_of_instances>"
+    exit 1
+fi
+
+# terminate the Flask server when the script exits
+kill_server() {
+    echo -e "\nTerminating the server"
+    pids=$(pgrep -laf "api.v1.app" | cut -f 1 -d ' ' | tr '\n' ' ')
+    for pid in $pids; do
+        kill -9 $pid 2> /dev/null
+    done
+}
+
+trap kill_server EXIT
+
+echo "Starting Flask server"
+while true; do
+    HBNB_API_PORT=5001 python3 -m api.v1.app 2> /dev/null &
+
+    # let's wait for the server to start
+    sleep 3
+
+    # check if the server is running
+    if ! pgrep -laf "api.v1.app" > /dev/null; then
+        echo "Failed to start the server"
+        exit 1
+    fi
+
+    echo "Generating dummy data"
+    python ./populate_storage.py "$1"
+
+    sleep 300 # generate more dummy data every five minutes
+done

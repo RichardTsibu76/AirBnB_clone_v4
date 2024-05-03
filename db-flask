@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+
+# this script runs the flask development server unconditionally for the
+# DBStorage environment
+
+# the script will run the populate_storage script to populate the database
+
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <number_of_instances>"
+    exit 1
+fi
+
+# terminate the Flask server when the script exits
+kill_server() {
+    echo -e "\nTerminating the server"
+    pids=$(pgrep -laf "api.v1.app" | cut -f 1 -d ' ' | tr '\n' ' ')
+    for pid in $pids; do
+        kill -9 "$pid" 2> /dev/null
+    done
+}
+
+trap kill_server EXIT
+
+echo "Starting Flask Server"
+while true; do
+    if ! pgrep -laf "api.v1.app" > /dev/null; then
+        HBNB_MYSQL_USER=hbnb_dev HBNB_MYSQL_PWD=hbnb_dev_pwd \
+            HBNB_MYSQL_HOST=localhost HBNB_MYSQL_DB=hbnb_dev_db \
+            HBNB_TYPE_STORAGE=db HBNB_API_HOST=0.0.0.0 HBNB_API_PORT=5002 \
+            python3 -m api.v1.app 2> /dev/null &
+    fi
+
+    # let's wait for the server to start
+    sleep 3
+
+    # check if the server is running
+    if ! pgrep -laf "api.v1.app" > /dev/null; then
+        echo "Failed to start the server"
+        echo "Here are few things you can check:"
+        echo -e "\t1. Is the port 5002 already in use?"
+        echo -e "\t2. Is the database server running?"
+        echo -e "\t3. Is the database server accessible?"
+
+        exit 1
+    fi
+
+    # generate dummy data
+    echo -e "\nGenerating dummy data"
+    HBNB_MYSQL_USER=hbnb_dev HBNB_MYSQL_PWD=hbnb_dev_pwd \
+    HBNB_MYSQL_HOST=localhost HBNB_MYSQL_DB=hbnb_dev_db \
+    HBNB_TYPE_STORAGE=db ./populate_storage.py "$1"
+
+    sleep 300 # generate more dummy data every five minutes
+done
